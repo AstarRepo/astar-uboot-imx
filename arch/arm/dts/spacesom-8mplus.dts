@@ -12,6 +12,10 @@
 	model = "SoMLabs SpaceSOM-8MPlus";
 	compatible = "somlabs,spacesom-8mplus", "fsl,imx8mp";
 
+	aliases {
+        eeprom0 = &eeprom_panel;
+    };
+
 	chosen {
 		bootargs = "console=ttymxc3,115200";
 		stdout-path = &uart4;
@@ -231,6 +235,21 @@
 		spi-tx-bus-width = <4>;
 		spi-rx-bus-width = <4>;
 	};
+};
+
+&i2c3 {
+       clock-frequency = <400000>;
+       pinctrl-names = "default";
+       pinctrl-0 = <&pinctrl_i2c3>;
+       status = "okay";
+
+       eeprom_panel: eeprom@52 {
+               compatible = "i2c-eeprom", "atmel,24c64";
+               pagesize = <32>;
+               address-width = <16>;
+               read-only;      /* Manufacturing EEPROM programmed at factory */
+               reg = <0x52>;
+       };
 };
 
 &i2c6 {
@@ -489,6 +508,13 @@
 			MX8MP_IOMUXC_SAI2_TXC__GPIO4_IO25		0x19
 		>;
 	};
+
+    pinctrl_i2c3: i2c3grp {
+		fsl,pins = <
+				MX8MP_IOMUXC_I2C3_SCL__I2C3_SCL                 0x400001c2
+				MX8MP_IOMUXC_I2C3_SDA__I2C3_SDA                 0x400001c2
+		>;
+    };
 
 	pinctrl_i2c6: i2c6grp {
 		fsl,pins = <

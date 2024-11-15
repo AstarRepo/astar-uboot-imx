@@ -19,6 +19,8 @@
 #include <asm/arch/sys_proto.h>
 #include <asm/mach-imx/gpio.h>
 #include <asm/mach-imx/mxc_i2c.h>
+// #include <i2c.h>
+#include <i2c_eeprom.h>
 #include <spl.h>
 #include <asm/mach-imx/dma.h>
 #include <power/pmic.h>
@@ -542,11 +544,105 @@ void board_late_mmc_env_init(void)
 	run_command(cmd, 0);
 }
 
+enum display_type {
+    dt_none,
+    dt_mipi10_dlc1010ebp28mf,
+    dt_mipi10_wf101ktyapmnb0,
+    dt_reserved
+};
+
+static int get_ast_eeprom(u32 eeprom_id, struct udevice **devp)
+{
+	int ret = 0;
+	int node;
+	ofnode eeprom;
+	char eeprom_str[16];
+	const char *path;
+
+	if (!gd->fdt_blob) {
+		printf("%s: don't have a valid gd->fdt_blob!\n", __func__);
+	}
+
+	node = fdt_path_offset(gd->fdt_blob, "/aliases");
+	if (node < 0) {
+		printf("%s: fdt_path_offset() failed: %d\n", __func__, node);
+	}
+
+	sprintf(eeprom_str, "eeprom%d", eeprom_id);
+
+	path = fdt_getprop(gd->fdt_blob, node, eeprom_str, NULL);
+	if (!path) {
+		printf("%s: no alias for %s\n", __func__, eeprom_str);
+	}
+
+	eeprom = ofnode_path(path);
+	if (!ofnode_valid(eeprom)) {
+		printf("%s: invalid hardware path to EEPROM\n", __func__);
+	}
+
+	ret = uclass_get_device_by_ofnode(UCLASS_I2C_EEPROM, eeprom, devp);
+	if (ret) {
+		printf("%s: cannot find EEPROM by node: [%s]\n", __func__, path);
+	}
+
+	return ret;
+}
+
+int read_ast_eeprom_data(u32 eeprom_id, int offset, u8 *buf,
+			 int size)
+{
+	struct udevice *dev;
+	int ret;
+
+	ret = get_ast_eeprom(eeprom_id, &dev);
+	if (ret) {
+		printf("%s: get_ast_eeprom() failed: %d\n", __func__, ret);
+	}
+
+	ret = i2c_set_chip_offset_len(dev, 2);
+	if (ret) {
+		printf("%s: Can't set chip offset\n", __func__);
+	}
+
+	ret = i2c_eeprom_read(dev, 0x0, buf, size);
+	if (ret) {
+		printf("%s: error reading data from EEPROM id: %d!, ret = %d\n",
+		       __func__, eeprom_id, ret);
+	}
+
+	return ret;
+}
+
 int board_late_init(void)
 {
+	enum display_type display = dt_none;
+    struct udevice *bus;
+    struct udevice *i2c_dev = NULL;
+    int ret, off;
+	uint8_t valb;
+	uint8_t buff[32];
+	const char *path = "eeprom0";
+	ofnode eeprom;
 #ifdef CONFIG_ENV_IS_IN_MMC
 	board_late_mmc_env_init();
 #endif
+
+	ret = read_ast_eeprom_data(0, 0x00, &buff, 32);
+	if (ret) {
+		printf("%s i2c_eeprom_read, err %d\n", __func__, ret);
+	}
+
+	char* disp = buff;
+	env_set("cb_disp", disp);
+	env_set("cb_type", "gcsomtst3");
+
+	printf("Display detected: [%s]\n", disp);
+	// printf("EEPROM: ");
+	// for (int i = 0; i < sizeof(buff); i++) {
+    //     printf("0x%02x ", disp[i]);
+    // }
+	// printf("\n");
+
 	return 0;
 }
 
